@@ -1,0 +1,17 @@
+# Node / Backend
+backend/node_modules/
+backend/.env
+backend/drobe_db
+
+# Flutter / Mobile
+mobile/build/
+mobile/.dart_tool/
+mobile/.flutter-plugins-dependencies
+mobile/*.iml
+
+# Web
+web/node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
