@@ -63,19 +63,35 @@
 
       <!-- SIGN UP -->
       <div id="tab-signup" style="display:none">
-        <div class="form-group">
-          <label data-i18n="form_name">Имя</label>
-          <input type="text" id="signup-name" placeholder="Иван Иванов">
+        <div id="signup-form-fields">
+          <div class="form-group">
+            <label data-i18n="form_name">Имя</label>
+            <input type="text" id="signup-name" placeholder="Иван Иванов">
+          </div>
+          <div class="form-group">
+            <label data-i18n="form_phone">Телефон</label>
+            <input type="text" id="signup-phone" placeholder="+998 (90) 123-45-67">
+          </div>
+          <div class="form-group">
+            <label data-i18n="form_email">Email</label>
+            <input type="email" id="signup-email" placeholder="pilot@skycheck.uz">
+          </div>
+          <div class="form-group">
+            <label data-i18n="form_password">Пароль</label>
+            <input type="password" id="signup-password" placeholder="Минимум 6 символов">
+          </div>
+          <button class="btn btn-primary btn-full" onclick="doRegister()" data-i18n="login_btn_signup">Зарегистрироваться</button>
         </div>
-        <div class="form-group">
-          <label data-i18n="form_email">Email</label>
-          <input type="email" id="signup-email" placeholder="pilot@skycheck.uz">
+        
+        <div id="signup-otp-fields" style="display:none">
+          <p style="font-size:0.88rem; color:var(--text-muted); margin-bottom:16px; text-align:center">Введите 6-значный код подтверждения, отправленный на ваш email</p>
+          <div class="form-group">
+            <label>Код подтверждения</label>
+            <input type="text" id="signup-otp-code" placeholder="••••••" style="text-align:center; font-size:1.4rem; letter-spacing:4px" maxlength="6">
+          </div>
+          <button class="btn btn-primary btn-full" onclick="doVerifyOTP()">Подтвердить код</button>
+          <button class="btn btn-secondary btn-full" onclick="cancelVerifyOTP()" style="margin-top:10px">Назад</button>
         </div>
-        <div class="form-group">
-          <label data-i18n="form_password">Пароль</label>
-          <input type="password" id="signup-password" placeholder="Минимум 6 символов">
-        </div>
-        <button class="btn btn-primary btn-full" onclick="doRegister()" data-i18n="login_btn_signup">Зарегистрироваться</button>
       </div>
     </div>
   </div>
@@ -736,6 +752,7 @@ let stepTimer = null;
 let isScrollCompleted = false;
 let quizQuestions = [];
 let quizSelectedAnswers = {};
+let signupVerifyEmail = null;
 let currentTheme = 'dark';
 let currentLanguage = 'ru';
 
@@ -1199,6 +1216,7 @@ function switchTab(tab) {
   document.getElementById('tab-btn-signin').classList.toggle('active', tab === 'signin');
   document.getElementById('tab-btn-signup').classList.toggle('active', tab === 'signup');
   document.getElementById('login-alert').innerHTML = '';
+  cancelVerifyOTP();
 }
 
 function showLoginAlert(msg, type = 'error') {
@@ -1241,15 +1259,50 @@ async function doLogin() {
 
 async function doRegister() {
   const name = document.getElementById('signup-name').value.trim();
+  const phone = document.getElementById('signup-phone').value.trim();
   const email = document.getElementById('signup-email').value.trim();
   const password = document.getElementById('signup-password').value;
-  if (!name || !email || !password) return showLoginAlert('Заполните все поля');
+  if (!name || !phone || !email || !password) return showLoginAlert('Заполните все поля');
+  if (phone.length < 7) return showLoginAlert('Введите корректный номер телефона');
   
   try {
     const r = await fetch(`${API}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password })
+      body: JSON.stringify({ name, phone, email, password })
+    });
+    const d = await r.json();
+    if (!r.ok) return showLoginAlert(d.error);
+    
+    if (d.message === 'VERIFICATION_REQUIRED') {
+      signupVerifyEmail = email;
+      document.getElementById('signup-form-fields').style.display = 'none';
+      document.getElementById('signup-otp-fields').style.display = 'block';
+      showLoginAlert('Код подтверждения отправлен на почту', 'success');
+    } else {
+      localStorage.setItem('skycheck_token', d.token);
+      localStorage.setItem('skycheck_user', JSON.stringify(d.user));
+      currentUser = d.user;
+      showLoginAlert('Аккаунт успешно создан!', 'success');
+      updateUserNavbarState();
+      setTimeout(() => {
+        showPage('home');
+      }, 1000);
+    }
+  } catch {
+    showLoginAlert('Ошибка соединения с сервером');
+  }
+}
+
+async function doVerifyOTP() {
+  const code = document.getElementById('signup-otp-code').value.trim();
+  if (code.length !== 6) return showLoginAlert('Введите 6-значный код');
+  
+  try {
+    const r = await fetch(`${API}/auth/verify-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: signupVerifyEmail, code })
     });
     const d = await r.json();
     if (!r.ok) return showLoginAlert(d.error);
@@ -1258,15 +1311,24 @@ async function doRegister() {
     localStorage.setItem('skycheck_user', JSON.stringify(d.user));
     currentUser = d.user;
     
-    showLoginAlert('Аккаунт успешно создан!', 'success');
+    showLoginAlert('Почта успешно подтверждена!', 'success');
     updateUserNavbarState();
     
     setTimeout(() => {
+      // Сбросить форму
+      cancelVerifyOTP();
       showPage('home');
     }, 1000);
   } catch {
     showLoginAlert('Ошибка соединения с сервером');
   }
+}
+
+function cancelVerifyOTP() {
+  signupVerifyEmail = null;
+  document.getElementById('signup-otp-code').value = '';
+  document.getElementById('signup-form-fields').style.display = 'block';
+  document.getElementById('signup-otp-fields').style.display = 'none';
 }
 
 function doLogout() {
